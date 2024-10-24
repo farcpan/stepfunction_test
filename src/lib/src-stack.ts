@@ -72,22 +72,12 @@ export class SrcStack extends Stack {
 			outputPath: '$.Payload',
 		});
 
-		// インデックスリスト生成タスク
-		const generateIndicesTask = new Pass(this, props.context.getResourceId('generate-index'), {
-			result: Result.fromArray(
-				[...Array(100).keys()].map((num) => {
-					return { sIndex: num };
-				})
-			),
-			resultPath: '$.sIndices',
-		});
-
 		// Tasks for core function
 		const coreTasksName = props.context.getResourceId('core-tasks');
 		const coreEachTaskName = props.context.getResourceId('core-task');
 		const coreTasksParallel = new Map(this, coreTasksName, {
 			stateName: coreTasksName,
-			maxConcurrency: 5,
+			maxConcurrency: 2,
 			itemsPath: '$',
 		})
 			.itemProcessor(
@@ -95,7 +85,7 @@ export class SrcStack extends Stack {
 					lambdaFunction: coreFunction,
 					payload: TaskInput.fromObject({
 						tim: JsonPath.stringAt('$.tim'),
-						sIndex: JsonPath.stringAt('$.sIndex'),
+						sIndex: JsonPath.numberAt('$.sIndex'),
 					}),
 				})
 			)
@@ -110,10 +100,7 @@ export class SrcStack extends Stack {
 		});
 
 		// Step Functions
-		const stepFunctionDefinition = firstTask
-			.next(generateIndicesTask)
-			.next(coreTasksParallel)
-			.next(lastTask);
+		const stepFunctionDefinition = firstTask.next(coreTasksParallel).next(lastTask);
 
 		const stateMachineName = props.context.getResourceId('state-machine');
 		const stateMachine = new StateMachine(this, stateMachineName, {
