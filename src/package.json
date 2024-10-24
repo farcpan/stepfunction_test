@@ -1,0 +1,32 @@
+{
+	"name": "src",
+	"version": "0.1.0",
+	"bin": {
+		"src": "bin/src.js"
+	},
+	"scripts": {
+		"build": "tsc",
+		"watch": "tsc -w",
+		"test": "jest",
+		"cdk": "cdk",
+		"dif-dev-all": "cdk diff -c env=dev --profile=dev",
+		"dep-dev-all": "cdk deploy -c env=dev --all --require-approval=never --profile=dev",
+		"des-dev-all": "cdk destroy -c env=dev --all --profile=dev"
+	},
+	"devDependencies": {
+		"@types/jest": "^29.5.12",
+		"@types/node": "22.5.4",
+		"aws-cdk": "2.163.1",
+		"esbuild": "^0.24.0",
+		"jest": "^29.7.0",
+		"prettier": "^3.3.3",
+		"ts-jest": "^29.2.5",
+		"ts-node": "^10.9.2",
+		"typescript": "~5.6.2"
+	},
+	"dependencies": {
+		"aws-cdk-lib": "2.163.1",
+		"constructs": "^10.0.0",
+		"source-map-support": "^0.5.21"
+	}
+}
