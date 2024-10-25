@@ -10,8 +10,6 @@ import {
 	Fail,
 	JsonPath,
 	Map,
-	Pass,
-	Result,
 	StateMachine,
 	TaskInput,
 } from 'aws-cdk-lib/aws-stepfunctions';
@@ -70,7 +68,19 @@ export class SrcStack extends Stack {
 			stateName: firstTaskName,
 			lambdaFunction: firstFunction,
 			outputPath: '$.Payload',
-		});
+		})
+			.addRetry({
+				interval: Duration.seconds(2),
+				maxAttempts: 3,
+				backoffRate: 2.0,
+				errors: ['States.ALL'],
+			})
+			.addCatch(
+				new Fail(this, props.context.getResourceId('first-task-failure'), {
+					error: 'States.ALL',
+					cause: 'Lambda function failed after retries',
+				})
+			);
 
 		// Tasks for core function
 		const coreTasksName = props.context.getResourceId('core-tasks');
@@ -118,6 +128,7 @@ export class SrcStack extends Stack {
 		rule.addTarget(
 			new SfnStateMachine(stateMachine, {
 				retryAttempts: 2,
+				// maxEventAge:
 			})
 		);
 	}
