@@ -15,6 +15,7 @@ import {
 } from 'aws-cdk-lib/aws-stepfunctions';
 import { Rule, Schedule } from 'aws-cdk-lib/aws-events';
 import { SfnStateMachine } from 'aws-cdk-lib/aws-events-targets';
+import { AttributeType, BillingMode, Table } from 'aws-cdk-lib/aws-dynamodb';
 
 interface SrcStackProps extends StackProps {
 	context: ContextParameters;
@@ -23,6 +24,17 @@ interface SrcStackProps extends StackProps {
 export class SrcStack extends Stack {
 	constructor(scope: Construct, id: string, props: SrcStackProps) {
 		super(scope, id, props);
+
+		///////////////////////////////////////////////////////////////////////////////////////
+		// DynamoDB
+		///////////////////////////////////////////////////////////////////////////////////////
+		const stateMachineManageTableName = props.context.getResourceId('state-machine-manage');
+		const statMachineManageTable = new Table(this, stateMachineManageTableName, {
+			tableName: stateMachineManageTableName,
+			billingMode: BillingMode.PAY_PER_REQUEST,
+			partitionKey: { name: 'tim', type: AttributeType.STRING },
+			sortKey: { name: 'data_type', type: AttributeType.STRING },
+		});
 
 		///////////////////////////////////////////////////////////////////////////////////////
 		// Lambdas first -> core -> last
@@ -36,8 +48,11 @@ export class SrcStack extends Stack {
 			handler: 'firstHandler',
 			runtime: Runtime.NODEJS_20_X,
 			timeout: Duration.seconds(10),
-			environment: {},
+			environment: {
+				tableName: statMachineManageTable.tableName,
+			},
 		});
+		statMachineManageTable.grantReadWriteData(firstFunction);
 
 		const coreFunctionName = props.context.getResourceId('core-func');
 		const coreFunction = new NodejsFunction(this, coreFunctionName, {
