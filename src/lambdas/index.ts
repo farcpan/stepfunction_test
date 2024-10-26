@@ -1,4 +1,5 @@
-import { DynamoDBClient, UpdateItemCommand } from '@aws-sdk/client-dynamodb';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, TransactWriteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { ConditionalCheckFailedException } from '@aws-sdk/client-dynamodb';
 
 export const firstHandler = async (event: any, context: any) => {
@@ -8,6 +9,8 @@ export const firstHandler = async (event: any, context: any) => {
 		throw new Error('env variable: `tableName` not set.');
 	}
 
+	const eventId = event.id;
+
 	const now = new Date().getTime() + 9 * 3600 * 1000; // 日本時間に変換
 	// yyyy-MM-ddTHH:mm:ss.SSSZ -> ["yyyy-MM-dd", "HH:mm:ss.SSSZ"] -> ["yyyy", "MM", "dd"]
 	const isoStringSplitted = new Date(now).toISOString().split('T')[0].split('-');
@@ -15,17 +18,21 @@ export const firstHandler = async (event: any, context: any) => {
 
 	// 多重起動防止
 	const client = new DynamoDBClient();
+	const docClient = DynamoDBDocumentClient.from(client);
 	try {
-		await client.send(
-			new UpdateItemCommand({
+		await docClient.send(
+			new UpdateCommand({
 				TableName: tableName,
 				Key: {
-					tim: {
-						S: dateString,
-					},
-					data_type: {
-						S: 'FIRST',
-					},
+					id: eventId,
+					data_type: 'EVENT_DUPLICATION',
+				},
+				UpdateExpression: 'SET #ttl = :ttl',
+				ExpressionAttributeNames: {
+					'#ttl': 'ttl',
+				},
+				ExpressionAttributeValues: {
+					':ttl': new Date().getTime() / 1000 + 3600, // 1時間後にTTL削除
 				},
 				ConditionExpression: 'attribute_not_exists(tim)',
 			})
@@ -41,13 +48,39 @@ export const firstHandler = async (event: any, context: any) => {
 		}
 	}
 
-	// return { tim: dateString };
-	return [...Array(100)].map((_, index) => {
+	// 次のLambdaに渡す値
+	const targetData = [...Array(100)].map((_, index) => {
 		return {
 			tim: dateString,
 			sIndex: index,
 		};
 	});
+
+	// DynamoDBにも書き込む
+	await docClient.send(
+		new TransactWriteCommand({
+			TransactItems: targetData.map((data) => {
+				return {
+					Update: {
+						TableName: tableName,
+						Key: {
+							id: 'EXECUTION_HISTORY',
+							data_type: `${data.tim}|${data.sIndex}`,
+						},
+						UpdateExpression: 'SET #ttl = :ttl',
+						ExpressionAttributeNames: {
+							'#ttl': 'ttl',
+						},
+						ExpressionAttributeValues: {
+							':ttl': new Date().getTime() / 1000 + 3600, // 1時間後にTTL削除
+						},
+					},
+				};
+			}),
+		})
+	);
+
+	return targetData;
 };
 
 export const coreHandler = async (event: any, context: any) => {

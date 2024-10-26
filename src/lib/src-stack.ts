@@ -1,4 +1,4 @@
-import { Duration, Stack, StackProps } from 'aws-cdk-lib';
+import { Duration, RemovalPolicy, Stack, StackProps } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { ContextParameters } from '../utils/context';
 import { join } from 'path';
@@ -32,8 +32,10 @@ export class SrcStack extends Stack {
 		const statMachineManageTable = new Table(this, stateMachineManageTableName, {
 			tableName: stateMachineManageTableName,
 			billingMode: BillingMode.PAY_PER_REQUEST,
-			partitionKey: { name: 'tim', type: AttributeType.STRING },
+			partitionKey: { name: 'id', type: AttributeType.STRING },
 			sortKey: { name: 'data_type', type: AttributeType.STRING },
+			removalPolicy: RemovalPolicy.DESTROY,
+			timeToLiveAttribute: 'ttl',
 		});
 
 		///////////////////////////////////////////////////////////////////////////////////////
@@ -138,7 +140,7 @@ export class SrcStack extends Stack {
 		// EventBridge
 		const eventName = props.context.getResourceId('event');
 		const rule = new Rule(this, eventName, {
-			schedule: Schedule.cron({ minute: '0', hour: '0' }),
+			schedule: Schedule.cron({ minute: '*/1', hour: '*' }),
 		});
 		rule.addTarget(
 			new SfnStateMachine(stateMachine, {
